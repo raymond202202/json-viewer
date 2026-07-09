@@ -29,8 +29,7 @@ json-viewer/
 ├── icon.png            # 应用图标 PNG（256×256）
 ├── icon.ico            # 应用图标 ICO（多尺寸）
 ├── .gitignore          # Git 忽略规则
-├── 启动JSON阅读器.bat   # Windows 备用启动脚本
-└── README.md           # 本文件
+├── README.md           # 本文件
 ```
 
 ## 技术栈
