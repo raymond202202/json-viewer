@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JSON 阅读器</title>
+<style>
+  [data-theme="light"] {
+    --bg: #f5f5f5; --surface: #ffffff; --border: #d0d0d0;
+    --text: #2c2c2c; --text-secondary: #888888;
+    --key: #0550ae; --string: #0a6e2e; --number: #b35900;
+    --boolean: #6e3fa0; --null: #c93c3c; --bracket: #555;
+    --accent: #0969da; --error: #c93c3c; --success: #1a7f37;
+    --hover: #e8e8f0; --toggle-bg: #eaeaea; --toggle-hover: #d4d4e0;
+    --highlight-bg: rgba(255,200,80,0.45);
+    --match-bg: rgba(9,105,218,0.12); --match-border: rgba(9,105,218,0.5);
+    --collapse-btn-bg: #e0e0e0; --collapse-btn-hover: #c0c0c0;
+  }
+  [data-theme="dark"] {
+    --bg: #1e1e2e; --surface: #282840; --border: #3a3a5c;
+    --text: #cdd6f4; --text-secondary: #a6adc8;
+    --key: #89b4fa; --string: #a6e3a1; --number: #fab387;
+    --boolean: #cba6f7; --null: #f38ba8; --bracket: #f9e2af;
+    --accent: #89b4fa; --error: #f38ba8; --success: #a6e3a1;
+    --hover: #313155; --toggle-bg: #363658; --toggle-hover: #45457a;
+    --highlight-bg: rgba(250,179,135,0.35);
+    --match-bg: rgba(137,180,250,0.15); --match-border: rgba(137,180,250,0.4);
+    --collapse-btn-bg: #3a3a5c; --collapse-btn-hover: #505080;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family:'JetBrains Mono','Fira Code','Cascadia Code','Consolas',monospace;
+    background:var(--bg); color:var(--text); height:100vh;
+    display:flex; flex-direction:column; overflow:hidden;
+    transition:background .3s,color .3s;
+  }
+  .toolbar {
+    display:flex; align-items:center; gap:8px; padding:8px 12px;
+    background:var(--surface); border-bottom:1px solid var(--border);
+    flex-shrink:0; transition:background .3s,border-color .3s;
+  }
+  .toolbar .title { font-size:14px; font-weight:700; color:var(--accent); margin-right:auto; }
+  .toolbar button {
+    background:var(--toggle-bg); color:var(--text); border:1px solid var(--border);
+    padding:5px 12px; border-radius:5px; cursor:pointer; font-size:12px;
+    font-family:inherit; transition:all .15s; white-space:nowrap;
+  }
+  .toolbar button:hover { background:var(--toggle-hover); border-color:var(--accent); }
+  .toolbar button.primary { background:var(--accent); color:#fff; border-color:var(--accent); font-weight:600; }
+  .toolbar button.primary:hover { opacity:.85; }
+  .toolbar .divider { width:1px; height:20px; background:var(--border); margin:0 2px; }
+  .theme-btn { font-size:16px!important; padding:4px 8px!important; background:transparent!important; border:1px solid var(--border)!important; }
+  .theme-btn:hover { background:var(--toggle-bg)!important; }
+
+  .main { display:flex; flex:1; overflow:hidden; position:relative; }
+
+  /* 面板折叠按钮 — 在各自边框上 */
+  .collapse-edge-btn {
+    position:absolute; top:50%; transform:translateY(-50%); z-index:10;
+    width:20px; height:56px; cursor:pointer; display:flex;
+    align-items:center; justify-content:center; font-size:10px;
+    color:var(--text-secondary); background:var(--collapse-btn-bg);
+    border:1px solid var(--border); transition:all .15s; user-select:none;
+  }
+  .collapse-edge-btn:hover { background:var(--collapse-btn-hover); color:var(--text); }
+  .collapse-edge-btn.left  { left:0; border-radius:0 5px 5px 0; border-left:none; }
+  .collapse-edge-btn.right { right:0; border-radius:5px 0 0 5px; border-right:none; }
+  .collapse-edge-btn.disabled { opacity:.3; pointer-events:none; }
+
+  .input-panel {
+    width:50%; display:flex; flex-direction:column;
+    border-right:1px solid var(--border); position:relative;
+    min-width:0; overflow:hidden; transition:width .25s ease,border-color .3s;
+  }
+  .input-panel.collapsed { width:0!important; border-right:none; overflow:hidden; }
+  .input-panel .panel-header {
+    display:flex; align-items:center; gap:6px; padding:6px 12px;
+    background:var(--surface); border-bottom:1px solid var(--border);
+    font-size:11px; color:var(--text-secondary); flex-shrink:0;
+    transition:background .3s,border-color .3s;
+  }
+  .input-panel .panel-header .panel-label { font-weight:600; }
+  .input-panel textarea {
+    flex:1; background:var(--bg); color:var(--text); border:none;
+    padding:12px; font-family:inherit; font-size:13px; line-height:1.6;
+    resize:none; outline:none; tab-size:2; transition:background .3s,color .3s;
+  }
+  .input-panel textarea::placeholder { color:var(--text-secondary); opacity:.5; }
+  .input-panel .status-bar {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:4px 12px; background:var(--surface); border-top:1px solid var(--border);
+    font-size:11px; color:var(--text-secondary); flex-shrink:0;
+    transition:background .3s,border-color .3s;
+  }
+  .status-bar .error { color:var(--error); } .status-bar .ok { color:var(--success); }
+
+  .output-panel { flex:1; display:flex; flex-direction:column; overflow:hidden; min-width:0; }
+  .output-panel .panel-header {
+    display:flex; align-items:center; gap:6px; padding:6px 12px;
+    background:var(--surface); border-bottom:1px solid var(--border);
+    font-size:11px; color:var(--text-secondary); flex-shrink:0;
+    transition:background .3s,border-color .3s;
+  }
+  .output-panel .panel-header .panel-label { font-weight:600; }
+  .output-panel .panel-header .stats { margin-left:auto; }
+  .output-panel .tree-container { flex:1; overflow:auto; padding:10px 14px; }
+  .output-panel .empty-state {
+    display:flex; align-items:center; justify-content:center; height:100%;
+    color:var(--text-secondary); font-size:14px; opacity:.6; user-select:none;
+  }
+
+  .json-tree { font-size:13px; line-height:1.7; }
+  .json-line {
+    display:flex; align-items:flex-start; cursor:default;
+    padding:1px 4px; border-radius:3px; transition:background .1s;
+  }
+  .json-line:hover { background:var(--hover); }
+  .json-line.matched { background:var(--match-bg); outline:1px solid var(--match-border); outline-offset:-1px; }
+
+  .toggle {
+    display:inline-flex; align-items:center; justify-content:center;
+    width:18px; height:18px; flex-shrink:0; cursor:pointer;
+    color:var(--text-secondary); font-size:10px; user-select:none;
+    border-radius:3px; margin-right:2px; transition:transform .15s,background .1s;
+  }
+  .toggle:hover { background:var(--toggle-hover); color:var(--text); }
+  .toggle.collapsed { transform:rotate(-90deg); }
+  .toggle.leaf { visibility:hidden; }
+
+  .json-key { color:var(--key); margin-right:4px; }
+  .json-string { color:var(--string); } .json-number { color:var(--number); }
+  .json-boolean { color:var(--boolean); } .json-null { color:var(--null); font-style:italic; }
+  .json-bracket { color:var(--bracket); }
+  .json-placeholder { color:var(--text-secondary); font-style:italic; opacity:.7; }
+
+  .copy-btn {
+    opacity:0; cursor:pointer; color:var(--text-secondary); margin-left:6px;
+    font-size:11px; padding:1px 5px; border-radius:3px; border:1px solid transparent;
+    background:transparent; transition:all .1s;
+  }
+  .json-line:hover .copy-btn { opacity:1; }
+  .copy-btn:hover { background:var(--toggle-bg); border-color:var(--border); color:var(--text); }
+
+  .copy-block-btn {
+    opacity:0; cursor:pointer; color:var(--text-secondary); margin-left:4px;
+    font-size:10px; padding:1px 5px; border-radius:3px; border:1px solid transparent;
+    background:transparent; transition:all .1s;
+  }
+  .json-line:hover .copy-block-btn { opacity:1; }
+  .copy-block-btn:hover { background:var(--toggle-bg); border-color:var(--accent); color:var(--accent); }
+
+  .search-bar {
+    display:flex; align-items:center; gap:6px; padding:5px 12px;
+    background:var(--surface); border-bottom:1px solid var(--border); flex-shrink:0;
+    transition:background .3s,border-color .3s;
+  }
+  .search-bar input {
+    flex:1; background:var(--bg); color:var(--text); border:1px solid var(--border);
+    padding:4px 8px; border-radius:4px; font-family:inherit; font-size:12px; outline:none;
+    transition:background .3s,color .3s,border-color .3s;
+  }
+  .search-bar input:focus { border-color:var(--accent); }
+  .search-bar .search-info { font-size:11px; color:var(--text-secondary); min-width:50px; text-align:right; }
+  .search-bar .nav-btn {
+    background:var(--toggle-bg); color:var(--text); border:1px solid var(--border);
+    padding:3px 7px; border-radius:4px; cursor:pointer; font-size:11px; font-family:inherit;
+  }
+  .search-bar .nav-btn:hover { background:var(--toggle-hover); }
+  .highlight { background:var(--highlight-bg); border-radius:2px; }
+
+  @media (max-width:768px) {
+    .main { flex-direction:column; }
+    .input-panel { width:100%!important; height:40%; border-right:none; border-bottom:1px solid var(--border); }
+    .input-panel.collapsed { height:0!important; width:100%!important; }
+    .output-panel { height:60%; }
+    .collapse-edge-btn { display:none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <span class="title">{ } JSON 阅读器</span>
+  <button onclick="formatJSON()" class="primary">格式化</button>
+  <button onclick="compressJSON()">压缩</button>
+  <div class="divider"></div>
+  <button onclick="expandAll()">全部展开</button>
+  <button onclick="collapseAll()">全部收拢</button>
+  <div class="divider"></div>
+  <button onclick="clearAll()">清空</button>
+  <div class="divider"></div>
+  <button class="theme-btn" onclick="toggleTheme()" title="切换主题" id="themeBtn">☀️</button>
+</div>
+
+<div class="main" id="mainContainer">
+  <!-- 左侧边框折叠按钮 -->
+  <div class="collapse-edge-btn left" id="leftEdgeBtn" onclick="toggleLeftPanel()" title="收起左侧">◀</div>
+
+  <div class="input-panel" id="inputPanel">
+    <div class="panel-header">
+      <span class="panel-label">📝 输入</span>
+    </div>
+    <textarea id="input" placeholder="在此粘贴 JSON 内容..." spellcheck="false"></textarea>
+    <div class="status-bar">
+      <span id="status-icon"></span>
+      <span id="status-text">等待输入...</span>
+    </div>
+  </div>
+
+  <div class="output-panel" id="outputPanel">
+    <div class="panel-header">
+      <span class="panel-label">📋 解析结果</span>
+      <span class="stats" id="stats"></span>
+    </div>
+    <div class="search-bar" id="searchBar" style="display:none;">
+      <input type="text" id="searchInput" placeholder="搜索键或值..." oninput="doSearch()" onkeydown="searchKeydown(event)">
+      <span class="search-info" id="searchInfo"></span>
+      <button class="nav-btn" onclick="searchPrev()">▲</button>
+      <button class="nav-btn" onclick="searchNext()">▼</button>
+      <button class="nav-btn" onclick="closeSearch()">✕</button>
+    </div>
+    <div class="tree-container" id="treeContainer">
+      <div class="empty-state">← 在左侧粘贴 JSON，自动解析展示</div>
+    </div>
+  </div>
+
+  <!-- 右侧边框折叠按钮 -->
+  <div class="collapse-edge-btn right" id="rightEdgeBtn" onclick="toggleRightPanel()" title="收起右侧">▶</div>
+</div>
+
+<script>
+  let jsonData = null;
+  let collapsedPaths = new Set();
+  let searchResults = [], searchIndex = -1, searchTerm = '';
+  let activePath = null;
+
+  const inputEl = document.getElementById('input');
+  const treeContainer = document.getElementById('treeContainer');
+  const statusIcon = document.getElementById('status-icon');
+  const statusText = document.getElementById('status-text');
+  const statsEl = document.getElementById('stats');
+  const searchBar = document.getElementById('searchBar');
+  const searchInput = document.getElementById('searchInput');
+  const searchInfo = document.getElementById('searchInfo');
+  const themeBtn = document.getElementById('themeBtn');
+  const inputPanel = document.getElementById('inputPanel');
+  const outputPanel = document.getElementById('outputPanel');
+  const leftEdgeBtn = document.getElementById('leftEdgeBtn');
+  const rightEdgeBtn = document.getElementById('rightEdgeBtn');
+
+  // ===== 主题 =====
+  function getTheme() { return document.documentElement.getAttribute('data-theme')||'light'; }
+  function setTheme(t) {
+    document.documentElement.setAttribute('data-theme',t);
+    themeBtn.textContent = t==='dark'?'🌙':'☀️';
+    localStorage.setItem('json-viewer-theme',t);
+  }
+  function toggleTheme() { setTheme(getTheme()==='dark'?'light':'dark'); }
+  (function(){ setTheme(localStorage.getItem('json-viewer-theme')||'light'); })();
+
+  // ===== 面板折叠（互斥：一侧收起后另一侧不可再收） =====
+  let leftCollapsed = false, rightCollapsed = false;
+
+  function toggleLeftPanel() {
+    if (rightCollapsed) return; // 右侧已收起，不允许收左侧
+    leftCollapsed = !leftCollapsed;
+    if (leftCollapsed) {
+      inputPanel.classList.add('collapsed');
+      leftEdgeBtn.textContent = '▶'; leftEdgeBtn.title = '展开左侧';
+      rightEdgeBtn.classList.add('disabled');
+    } else {
+      inputPanel.classList.remove('collapsed');
+      leftEdgeBtn.textContent = '◀'; leftEdgeBtn.title = '收起左侧';
+      rightEdgeBtn.classList.remove('disabled');
+    }
+  }
+
+  function toggleRightPanel() {
+    if (leftCollapsed) return; // 左侧已收起，不允许收右侧
+    rightCollapsed = !rightCollapsed;
+    if (rightCollapsed) {
+      outputPanel.style.display = 'none';
+      inputPanel.style.flex = '1';
+      inputPanel.style.width = 'auto';
+      rightEdgeBtn.textContent = '◀'; rightEdgeBtn.title = '展开右侧';
+      leftEdgeBtn.classList.add('disabled');
+    } else {
+      outputPanel.style.display = '';
+      inputPanel.style.flex = '';
+      inputPanel.style.width = '50%';
+      rightEdgeBtn.textContent = '▶'; rightEdgeBtn.title = '收起右侧';
+      leftEdgeBtn.classList.remove('disabled');
+    }
+  }
+
+  // ===== 自动解析 =====
+  let debounceTimer;
+  inputEl.addEventListener('input', () => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(parseAndRender, 400);
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey||e.metaKey) && e.key==='f') {
+      if (document.activeElement===inputEl) return;
+      e.preventDefault(); toggleSearch();
+    }
+    if ((e.ctrlKey||e.metaKey) && e.key==='Enter') { e.preventDefault(); formatJSON(); }
+    if ((e.ctrlKey||e.metaKey) && e.key==='b') { e.preventDefault(); toggleLeftPanel(); }
+  });
+
+  function parseAndRender() {
+    const raw = inputEl.value.trim();
+    if (!raw) {
+      jsonData=null; activePath=null;
+      treeContainer.innerHTML='<div class="empty-state">← 在左侧粘贴 JSON，自动解析展示</div>';
+      statusIcon.textContent=''; statusText.textContent='等待输入...'; statsEl.textContent='';
+      return;
+    }
+    try {
+      jsonData = JSON.parse(raw);
+      collapsedPaths.clear(); activePath=null;
+      renderTree();
+      updateStatus('ok','✅','JSON 解析成功'); updateStats();
+    } catch(e) {
+      jsonData=null; activePath=null;
+      treeContainer.innerHTML=`<div class="empty-state" style="color:var(--error);">❌ 解析失败：${escapeHtml(e.message)}</div>`;
+      updateStatus('error','❌','JSON 格式错误'); statsEl.textContent='';
+    }
+  }
+
+  function formatJSON() {
+    if(!jsonData){parseAndRender();return;}
+    inputEl.value=JSON.stringify(jsonData,null,2);
+    collapsedPaths.clear(); activePath=null; renderTree(); updateStats();
+  }
+  function compressJSON() {
+    if(!jsonData){parseAndRender();if(!jsonData)return;}
+    inputEl.value=JSON.stringify(jsonData);
+    collapsedPaths.clear(); activePath=null; renderTree(); updateStats();
+  }
+  function updateStatus(type,icon,text){ statusIcon.textContent=icon; statusText.textContent=text; statusText.className=type; }
+  function updateStats() {
+    if(!jsonData){statsEl.textContent='';return;}
+    const c=countNodes(jsonData);
+    statsEl.textContent=`${c.keys} 个键 · ${c.leaves} 个值 · ${c.total} 个节点`;
+  }
+  function countNodes(obj) {
+    let keys=0,leaves=0,total=1;
+    if(Array.isArray(obj)){obj.forEach(v=>{if(v!==null&&typeof v==='object'){const c=countNodes(v);keys+=c.keys;leaves+=c.leaves;total+=c.total;}else{leaves++;total++;}});}
+    else if(obj!==null&&typeof obj==='object'){Object.entries(obj).forEach(([k,v])=>{keys++;if(v!==null&&typeof v==='object'){const c=countNodes(v);keys+=c.keys;leaves+=c.leaves;total+=c.total;}else{leaves++;total++;}});}
+    return {keys,leaves,total};
+  }
+
+  function getValueByPath(obj,path) {
+    if(!path||path==='root')return obj;
+    const parts=path.split('.'); let cur=obj;
+    for(const p of parts){if(cur===null||typeof cur!=='object')return undefined;cur=Array.isArray(cur)?cur[parseInt(p)]:cur[p];}
+    return cur;
+  }
+
+  // ===== 核心：在 textarea 中定位 key:value 并选中 =====
+  function highlightInTextarea(path, keyName) {
+    if (!jsonData) return;
+    const text = inputEl.value;
+
+    if (!path || path === 'root') {
+      // 根节点：选中全部
+      inputEl.focus();
+      inputEl.setSelectionRange(0, text.length);
+      return;
+    }
+
+    // 在 textarea 中查找 "keyName":
+    const searchKey = '"' + keyName + '"';
+    const keyIdx = text.indexOf(searchKey);
+    if (keyIdx === -1) return;
+
+    // 从 key 后面找冒号
+    let pos = keyIdx + searchKey.length;
+    while (pos < text.length && (text[pos] === ' ' || text[pos] === '\t' || text[pos] === '\n' || text[pos] === '\r')) pos++;
+    if (pos >= text.length || text[pos] !== ':') return;
+    pos++; // 跳过冒号
+    while (pos < text.length && (text[pos] === ' ' || text[pos] === '\t' || text[pos] === '\n' || text[pos] === '\r')) pos++;
+    if (pos >= text.length) return;
+
+    // 根据第一个字符判断值类型，找到值的结束位置
+    const ch = text[pos];
+    let endPos;
+
+    if (ch === '"') {
+      // 字符串：找到闭合引号
+      endPos = pos + 1;
+      while (endPos < text.length) {
+        if (text[endPos] === '\\') { endPos += 2; continue; }
+        if (text[endPos] === '"') { endPos++; break; }
+        endPos++;
+      }
+    } else if (ch === '{' || ch === '[') {
+      // 对象/数组：找到匹配的闭合括号
+      endPos = findMatchingBracket(text, pos);
+    } else if (ch === 't' || ch === 'f') {
+      // true/false
+      endPos = pos + (ch === 't' ? 4 : 5);
+    } else if (ch === 'n') {
+      // null
+      endPos = pos + 4;
+    } else if (ch === '-' || (ch >= '0' && ch <= '9')) {
+      // 数字
+      endPos = pos;
+      while (endPos < text.length && /[-\d.eE+]/.test(text[endPos])) endPos++;
+    } else {
+      return;
+    }
+
+    inputEl.focus();
+    inputEl.setSelectionRange(keyIdx, endPos);
+  }
+
+  // 找到匹配的闭合括号（支持嵌套和字符串）
+  function findMatchingBracket(text, start) {
+    const open = text[start];
+    const close = open === '{' ? '}' : ']';
+    let depth = 1;
+    let i = start + 1;
+    while (i < text.length && depth > 0) {
+      const ch = text[i];
+      if (ch === '"') {
+        i++;
+        while (i < text.length) {
+          if (text[i] === '\\') { i += 2; continue; }
+          if (text[i] === '"') break;
+          i++;
+        }
+      } else if (ch === open) {
+        depth++;
+      } else if (ch === close) {
+        depth--;
+      }
+      i++;
+    }
+    return i;
+  }
+
+  // ===== 渲染树 =====
+  function renderTree() {
+    if(!jsonData)return;
+    treeContainer.innerHTML='';
+    const root=document.createElement('div'); root.className='json-tree';
+    root.appendChild(buildNode(jsonData,'','root'));
+    treeContainer.appendChild(root);
+  }
+
+  function buildNode(value,path,keyName) {
+    const container=document.createElement('div'); container.className='json-node'; container.dataset.path=path;
+    if(value===null) container.appendChild(createLeafLine(keyName,'null','null',path));
+    else if(typeof value==='boolean') container.appendChild(createLeafLine(keyName,String(value),'boolean',path));
+    else if(typeof value==='number') container.appendChild(createLeafLine(keyName,String(value),'number',path));
+    else if(typeof value==='string') container.appendChild(createLeafLine(keyName,`"${value}"`,'string',path));
+    else if(Array.isArray(value)) container.appendChild(buildCollapsible(value,path,keyName,true));
+    else if(typeof value==='object') container.appendChild(buildCollapsible(value,path,keyName,false));
+    return container;
+  }
+
+  function createLeafLine(keyName,displayValue,typeClass,path) {
+    const line=document.createElement('span'); line.className='json-line'; line.dataset.path=path;
+    const toggle=document.createElement('span'); toggle.className='toggle leaf'; toggle.textContent='▶'; line.appendChild(toggle);
+    if(keyName&&keyName!=='root'){const ks=document.createElement('span');ks.className='json-key';ks.textContent=`"${keyName}": `;line.appendChild(ks);}
+    const vs=document.createElement('span');vs.className=`json-${typeClass}`;vs.textContent=displayValue;line.appendChild(vs);
+    const cb=document.createElement('button');cb.className='copy-btn';cb.textContent='📋';cb.title='复制值';
+    cb.onclick=e=>{e.stopPropagation();
+      const valOnly=typeClass==='string'?displayValue.slice(1,-1):displayValue;
+      const full=keyName&&keyName!=='root'?`"${keyName}": ${displayValue}`:valOnly;
+      copyToClipboard(full);
+    };
+    line.appendChild(cb);
+    line.addEventListener('click',e=>{if(e.target.classList.contains('copy-btn'))return;selectNode(path,keyName,line);});
+    return line;
+  }
+
+  function buildCollapsible(value,path,keyName,isArray) {
+    const wrapper=document.createElement('span'); wrapper.className='json-collapsible';
+    const hl=document.createElement('span'); hl.className='json-line'; hl.dataset.path=path;
+    const toggle=document.createElement('span'); toggle.className='toggle'; toggle.textContent='▼';
+    toggle.onclick=e=>{e.stopPropagation();toggleNode(path);}; hl.appendChild(toggle);
+    if(keyName&&keyName!=='root'){const ks=document.createElement('span');ks.className='json-key';ks.textContent=`"${keyName}": `;hl.appendChild(ks);}
+    const ob=document.createElement('span');ob.className='json-bracket';ob.textContent=isArray?'[':'{';hl.appendChild(ob);
+    const ph=document.createElement('span');ph.className='json-placeholder';
+    const cnt=isArray?value.length:Object.keys(value).length; ph.textContent=` ${cnt} 项`; hl.appendChild(ph);
+    const cb2=document.createElement('span');cb2.className='json-bracket';cb2.textContent=isArray?']':'}';hl.appendChild(cb2);
+    const cbb=document.createElement('button');cbb.className='copy-block-btn';cbb.textContent='📋块';cbb.title='复制整个块';
+    cbb.onclick=e=>{e.stopPropagation();copyToClipboard(JSON.stringify(value,null,2));}; hl.appendChild(cbb);
+    wrapper.appendChild(hl);
+    const cc=document.createElement('div');cc.className='json-children';cc.style.paddingLeft='20px';
+    const entries=isArray?value.map((v,i)=>[String(i),v]):Object.entries(value);
+    entries.forEach(([k,v])=>{const cp=path?`${path}.${k}`:k;cc.appendChild(buildNode(v,cp,k));});
+    wrapper.appendChild(cc);
+    if(collapsedPaths.has(path)){toggle.classList.add('collapsed');cc.style.display='none';ph.style.display='inline';}else{ph.style.display='none';}
+    hl.addEventListener('click',e=>{if(e.target.classList.contains('toggle')||e.target.classList.contains('copy-block-btn'))return;selectNode(path,keyName,hl);});
+    return wrapper;
+  }
+
+  function selectNode(path,keyName,lineEl) {
+    treeContainer.querySelectorAll('.json-line.matched').forEach(el=>el.classList.remove('matched'));
+    if(activePath===path){activePath=null;inputEl.setSelectionRange(0,0);return;}
+    activePath=path; lineEl.classList.add('matched');
+    highlightInTextarea(path,keyName);
+  }
+
+  function toggleNode(path){if(collapsedPaths.has(path))collapsedPaths.delete(path);else collapsedPaths.add(path);renderTreeWithState();}
+  function renderTreeWithState(){
+    if(!jsonData)return;
+    const prev=activePath; treeContainer.innerHTML='';
+    const root=document.createElement('div');root.className='json-tree';
+    root.appendChild(buildNode(jsonData,'','root'));treeContainer.appendChild(root);
+    if(prev){const m=treeContainer.querySelector(`.json-line[data-path="${CSSescape(prev)}"]`);if(m){m.classList.add('matched');activePath=prev;}else activePath=null;}
+    if(searchTerm)doSearch();
+  }
+  function expandAll(){collapsedPaths.clear();renderTreeWithState();}
+  function collapseAll(){if(!jsonData)return;collapsedPaths.clear();collectAllPaths(jsonData,'');renderTreeWithState();}
+  function collectAllPaths(value,path){
+    if(value!==null&&typeof value==='object'){if(path)collapsedPaths.add(path);
+      const entries=Array.isArray(value)?value.map((v,i)=>[String(i),v]):Object.entries(value);
+      entries.forEach(([k,v])=>{const cp=path?`${path}.${k}`:k;collectAllPaths(v,cp);});}
+  }
+  function clearAll(){
+    inputEl.value='';jsonData=null;activePath=null;collapsedPaths.clear();
+    treeContainer.innerHTML='<div class="empty-state">← 在左侧粘贴 JSON，自动解析展示</div>';
+    statusIcon.textContent='';statusText.textContent='等待输入...';statsEl.textContent='';closeSearch();
+  }
+  function copyToClipboard(text){
+    navigator.clipboard.writeText(text).then(()=>{
+      const t=document.createElement('div');t.textContent='已复制 ✓';
+      t.style.cssText='position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--accent);color:#fff;padding:8px 20px;border-radius:8px;font-size:13px;font-weight:600;z-index:9999;pointer-events:none;animation:fadeOut 1.5s forwards;';
+      document.body.appendChild(t);setTimeout(()=>t.remove(),1600);
+    }).catch(()=>{});
+  }
+
+  // ===== 搜索 =====
+  function toggleSearch(){if(searchBar.style.display==='none'){searchBar.style.display='flex';searchInput.focus();}else closeSearch();}
+  function closeSearch(){searchBar.style.display='none';searchInput.value='';searchTerm='';searchResults=[];searchIndex=-1;searchInfo.textContent='';clearHighlights();}
+  function doSearch(){
+    searchTerm=searchInput.value.trim().toLowerCase();searchResults=[];searchIndex=-1;clearHighlights();
+    if(!searchTerm||!jsonData){searchInfo.textContent='';return;}
+    treeContainer.querySelectorAll('.json-line').forEach(l=>{if(l.textContent.toLowerCase().includes(searchTerm))searchResults.push(l);});
+    if(searchResults.length>0){searchIndex=0;highlightCurrent();searchInfo.textContent=`1 / ${searchResults.length}`;}else searchInfo.textContent='无结果';
+  }
+  function searchNext(){if(!searchResults.length)return;searchIndex=(searchIndex+1)%searchResults.length;highlightCurrent();searchInfo.textContent=`${searchIndex+1} / ${searchResults.length}`;}
+  function searchPrev(){if(!searchResults.length)return;searchIndex=(searchIndex-1+searchResults.length)%searchResults.length;highlightCurrent();searchInfo.textContent=`${searchIndex+1} / ${searchResults.length}`;}
+  function searchKeydown(e){if(e.key==='Enter'){e.preventDefault();e.shiftKey?searchPrev():searchNext();}if(e.key==='Escape')closeSearch();}
+  function highlightCurrent(){clearHighlights();if(searchResults[searchIndex]){searchResults[searchIndex].classList.add('highlight');searchResults[searchIndex].scrollIntoView({block:'center',behavior:'smooth'});}}
+  function clearHighlights(){treeContainer.querySelectorAll('.highlight').forEach(el=>el.classList.remove('highlight'));}
+  function escapeHtml(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+  function CSSescape(s){return String(s).replace(/([^\w-])/g,'\\$1');}
+
+  const animStyle=document.createElement('style');
+  animStyle.textContent='@keyframes fadeOut{0%,60%{opacity:1}100%{opacity:0}}';
+  document.head.appendChild(animStyle);
+
+  // 初始示例
+  const sample = {
+    "name": "JSON 阅读器",
+    "version": "2.1.0",
+    "config": { "theme": "light", "autoParse": true, "indentSize": 2 },
+    "stats": { "users": 1024, "active": true }
+  };
+  inputEl.value = JSON.stringify(sample, null, 2);
+  parseAndRender();
+</script>
+</body>
+</html>
