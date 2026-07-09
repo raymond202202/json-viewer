@@ -2,6 +2,8 @@
 
 > 粘贴 JSON 即可展开/收拢查看的轻量级桌面工具。
 
+![截图](screenshots/json-viewer-screenshot.png)
+
 ## 功能
 
 | 功能 | 说明 | 快捷键 |
