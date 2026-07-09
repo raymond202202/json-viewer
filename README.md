@@ -3,7 +3,7 @@
 > 粘贴 JSON 即可展开/收拢查看的轻量级桌面工具。
 
 ![截图-light](screenshots/json-viewer-screenshot.png)
-![截图-dark](screenshots/json-viewer-dark.png)
+![截图-2](screenshots/json-viewer-screenshot-2.png)
 
 ## 功能
 
