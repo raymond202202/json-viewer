@@ -131,3 +131,40 @@ npm run build
 ## 许可
 
 MIT
+
+
+---
+
+## 🔍 JSON Viewer (English)
+
+A lightweight desktop tool for viewing and navigating JSON data with a tree structure.
+
+**Features:**
+- **Auto-parsing** — Paste JSON on the left, rendered tree on the right
+- **Collapse/Expand** — Click `▼` arrows to fold/unfold nodes
+- **Format & Minify** — Beautify or compress JSON
+- **Search** — `Ctrl+F` to search keys/values with up/down navigation
+- **Copy** — Copy key-value pairs or entire subtrees with one click
+- **Brace Matching** — Click tree nodes to locate corresponding JSON blocks
+- **Panel Collapse** — `Ctrl+B` to hide panels independently
+- **Theme Switch** — Light/Dark with auto-saved preference
+- **Syntax Highlighting** — Color-coded strings, numbers, booleans, nulls, keys
+
+### Quick Start
+```bash
+# Open in browser (no install needed)
+open index.html
+
+# Or as Electron app
+npm install && npm start
+```
+
+---
+
+## 🤖 AI 辅助声明
+
+本项目由 AI 智能体（Hermes Agent by Nous Research）辅助开发。从需求分析、UI 设计到代码实现、文档撰写均由 AI 在人类指导下完成。人工负责需求提出、代码审查和最终发布。
+
+## 🤖 AI Assistance Declaration
+
+This project was developed with assistance from an AI agent (Hermes Agent by Nous Research). From requirements analysis and UI design to code implementation and documentation, all work was done by AI under human guidance. Human contributors were responsible for requirements definition, code review, and final release.
