@@ -2,14 +2,15 @@
 
 > 粘贴 JSON 即可展开/收拢查看的轻量级桌面工具。
 
-![截图-light](screenshots/json-viewer-screenshot.png)
-![截图-2](screenshots/json-viewer-screenshot-2.png)
-
 ## 功能
 
 | 功能 | 说明 | 快捷键 |
 |------|------|--------|
 | 自动解析 | 左侧粘贴 JSON，右侧实时渲染树形结构 | — |
+| 导入文件 | 打开本地 .json / .har / .txt / .jsonc 文件 | `Ctrl+O` |
+| 拖拽导入 | 拖拽文件到窗口直接打开 | — |
+| HAR 识别 | 自动识别 HAR 格式，显示请求数/域名统计 | — |
+| 命令行打开 | 支持 `JSON阅读器.exe myfile.json` 或双击关联 | — |
 | 展开/收拢 | 点击节点前 `▼` 箭头折叠或展开 | — |
 | 全部展开/收拢 | 工具栏一键操作 | — |
 | 格式化 | 美化缩进 JSON | `Ctrl+Enter` |
@@ -26,13 +27,15 @@
 
 ```
 json-viewer/
-├── index.html          # 主界面（571行，单文件全功能）
-├── main.js             # Electron 主进程入口
+├── index.html          # 主界面（单文件全功能）
+├── main.js             # Electron 主进程（文件关联/命令行支持）
+├── preload.js          # 预加载脚本（IPC 桥接）
 ├── package.json        # npm 配置与依赖
 ├── icon.png            # 应用图标 PNG（256×256）
 ├── icon.ico            # 应用图标 ICO（多尺寸）
 ├── .gitignore          # Git 忽略规则
-├── README.md           # 本文件
+├── 启动JSON阅读器.bat   # Windows 备用启动脚本
+└── README.md           # 本文件
 ```
 
 ## 技术栈
