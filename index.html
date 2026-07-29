@@ -103,11 +103,27 @@
   }
   .output-panel .panel-header .panel-label { font-weight:600; }
   .output-panel .panel-header .stats { margin-left:auto; }
-  .output-panel .tree-container { flex:1; overflow:auto; padding:10px 14px; }
+  .output-panel .tree-container { flex:1; overflow:auto; padding:10px 14px; position:relative; }
+  #treeContent { min-height:100%; }
   .output-panel .empty-state {
     display:flex; align-items:center; justify-content:center; height:100%;
     color:var(--text-secondary); font-size:14px; opacity:.6; user-select:none;
   }
+
+  .loading-overlay {
+    position:absolute; top:0; left:0; right:0; bottom:0;
+    background:var(--bg); display:flex; flex-direction:column;
+    align-items:center; justify-content:center; z-index:10;
+    border-radius:0; transition:opacity .2s;
+  }
+  .loading-overlay.hidden { display:none; }
+  .loading-spinner {
+    width:36px; height:36px; border:3px solid var(--border);
+    border-top-color:var(--accent); border-radius:50%;
+    animation:spin .7s linear infinite;
+  }
+  .loading-overlay p { margin-top:14px; font-size:13px; color:var(--text-secondary); }
+  @keyframes spin { to { transform:rotate(360deg); } }
 
   .json-tree { font-size:13px; line-height:1.7; }
   .json-line {
@@ -152,6 +168,7 @@
   .search-bar {
     display:flex; align-items:center; gap:6px; padding:5px 12px;
     background:var(--surface); border-bottom:1px solid var(--border); flex-shrink:0;
+    position:relative; z-index:20;
     transition:background .3s,border-color .3s;
   }
   .search-bar input {
@@ -166,7 +183,29 @@
     padding:3px 7px; border-radius:4px; cursor:pointer; font-size:11px; font-family:inherit;
   }
   .search-bar .nav-btn:hover { background:var(--toggle-hover); }
+  .search-bar .nav-btn.active { background:var(--accent); color:#fff; }
   .highlight { background:var(--highlight-bg); border-radius:2px; }
+
+  .drop-overlay {
+    position:fixed; top:0; left:0; right:0; bottom:0;
+    background:rgba(0,0,0,.45); z-index:9999;
+    display:none; align-items:center; justify-content:center;
+  }
+  .drop-overlay.active { display:flex; }
+  .drop-overlay-content {
+    background:var(--surface); border:3px dashed var(--accent);
+    border-radius:16px; padding:44px 64px; text-align:center;
+    color:var(--text); box-shadow:0 8px 32px rgba(0,0,0,.25);
+  }
+  .drop-overlay-content .drop-icon { font-size:48px; display:block; margin-bottom:8px; }
+  .drop-overlay-content p { font-size:16px; font-weight:600; margin:0; }
+  .drop-overlay-content .drop-sub { font-size:13px; color:var(--text-secondary); font-weight:400; margin-top:6px; }
+
+  .file-name-tag {
+    display:inline-flex; align-items:center; gap:3px;
+    max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+    color:var(--accent); font-size:11px; flex-shrink:0;
+  }
 
   @media (max-width:768px) {
     .main { flex-direction:column; }
@@ -181,15 +220,24 @@
 
 <div class="toolbar">
   <span class="title">{ } JSON 阅读器</span>
-  <button onclick="formatJSON()" class="primary">格式化</button>
+  <button onclick="formatJSON()">美观</button>
   <button onclick="compressJSON()">压缩</button>
+  <button onclick="openFileDialog()">📂 打开文件</button>
+  <input type="file" id="fileInput" accept=".json,.har,.txt,.js,.jsonc" style="display:none;" onchange="handleFileSelect(event)">
+  <button onclick="clearAll()">清空</button>
   <div class="divider"></div>
   <button onclick="expandAll()">全部展开</button>
   <button onclick="collapseAll()">全部收拢</button>
   <div class="divider"></div>
-  <button onclick="clearAll()">清空</button>
-  <div class="divider"></div>
   <button class="theme-btn" onclick="toggleTheme()" title="切换主题" id="themeBtn">☀️</button>
+</div>
+
+<div class="drop-overlay" id="dropOverlay">
+  <div class="drop-overlay-content">
+    <span class="drop-icon">📂</span>
+    <p>释放文件以导入</p>
+    <p class="drop-sub">支持 .json / .har / .txt / .jsonc</p>
+  </div>
 </div>
 
 <div class="main" id="mainContainer">
@@ -200,10 +248,14 @@
     <div class="panel-header">
       <span class="panel-label">📝 输入</span>
     </div>
-    <textarea id="input" placeholder="在此粘贴 JSON 内容..." spellcheck="false"></textarea>
+    <textarea id="input" placeholder="在此粘贴 JSON 内容，或拖拽文件到窗口..." spellcheck="false"></textarea>
+    <div class="loading-overlay hidden" id="loadingOverlay">
+      <div class="loading-spinner"></div>
+      <p>导入中…</p>
+    </div>
     <div class="status-bar">
-      <span id="status-icon"></span>
-      <span id="status-text">等待输入...</span>
+      <span><span id="status-icon"></span> <span id="status-text">等待输入...</span></span>
+      <span class="file-name-tag" id="fileNameTag" style="display:none;"></span>
     </div>
   </div>
 
@@ -213,14 +265,17 @@
       <span class="stats" id="stats"></span>
     </div>
     <div class="search-bar" id="searchBar" style="display:none;">
-      <input type="text" id="searchInput" placeholder="搜索键或值..." oninput="doSearch()" onkeydown="searchKeydown(event)">
+      <input type="text" id="searchInput" placeholder="搜索键或值..." oninput="debouncedSearch()" onkeydown="searchKeydown(event)">
+      <button class="nav-btn" id="searchKeyBtn" onclick="toggleSearchKeysOnly()" title="只匹配键名">键</button>
       <span class="search-info" id="searchInfo"></span>
       <button class="nav-btn" onclick="searchPrev()">▲</button>
       <button class="nav-btn" onclick="searchNext()">▼</button>
       <button class="nav-btn" onclick="closeSearch()">✕</button>
     </div>
     <div class="tree-container" id="treeContainer">
-      <div class="empty-state">← 在左侧粘贴 JSON，自动解析展示</div>
+      <div id="treeContent">
+        <div class="empty-state">← 在左侧粘贴 JSON，自动解析展示</div>
+      </div>
     </div>
   </div>
 
@@ -235,7 +290,7 @@
   let activePath = null;
 
   const inputEl = document.getElementById('input');
-  const treeContainer = document.getElementById('treeContainer');
+  const treeContainer = document.getElementById('treeContent');
   const statusIcon = document.getElementById('status-icon');
   const statusText = document.getElementById('status-text');
   const statsEl = document.getElementById('stats');
@@ -247,6 +302,13 @@
   const outputPanel = document.getElementById('outputPanel');
   const leftEdgeBtn = document.getElementById('leftEdgeBtn');
   const rightEdgeBtn = document.getElementById('rightEdgeBtn');
+  const fileInput = document.getElementById('fileInput');
+  const dropOverlay = document.getElementById('dropOverlay');
+  const fileNameTag = document.getElementById('fileNameTag');
+  const loadingOverlay = document.getElementById('loadingOverlay');
+  let currentFileName = null;
+  let dragCounter = 0;
+  let wasSearchMode = false;
 
   // ===== 主题 =====
   function getTheme() { return document.documentElement.getAttribute('data-theme')||'light'; }
@@ -302,11 +364,13 @@
 
   document.addEventListener('keydown', (e) => {
     if ((e.ctrlKey||e.metaKey) && e.key==='f') {
-      if (document.activeElement===inputEl) return;
-      e.preventDefault(); toggleSearch();
+      e.preventDefault();
+      document.activeElement.blur(); // 失去焦点，避免浏览器拦截
+      toggleSearch();
     }
     if ((e.ctrlKey||e.metaKey) && e.key==='Enter') { e.preventDefault(); formatJSON(); }
     if ((e.ctrlKey||e.metaKey) && e.key==='b') { e.preventDefault(); toggleLeftPanel(); }
+    if ((e.ctrlKey||e.metaKey) && e.key==='o') { e.preventDefault(); openFileDialog(); }
   });
 
   function parseAndRender() {
@@ -319,8 +383,15 @@
     }
     try {
       jsonData = JSON.parse(raw);
+      const stats = countNodes(jsonData);
       collapsedPaths.clear(); activePath=null;
-      renderTree();
+      // 大文件自动全折叠
+      if(stats.total > 500) {
+        collectAllPaths(jsonData, '');
+        renderTreeWithState();
+      } else {
+        renderTree();
+      }
       updateStatus('ok','✅','JSON 解析成功'); updateStats();
     } catch(e) {
       jsonData=null; activePath=null;
@@ -342,8 +413,15 @@
   function updateStatus(type,icon,text){ statusIcon.textContent=icon; statusText.textContent=text; statusText.className=type; }
   function updateStats() {
     if(!jsonData){statsEl.textContent='';return;}
-    const c=countNodes(jsonData);
-    statsEl.textContent=`${c.keys} 个键 · ${c.leaves} 个值 · ${c.total} 个节点`;
+    const har=detectHAR(jsonData);
+    if(har.isHAR){
+      let parts=['🐙 HAR · '+har.total+' 个请求'];
+      if(har.domainCount) parts.push(har.domainCount+' 个域名');
+      statsEl.textContent=parts.join(' · ');
+    }else{
+      const c=countNodes(jsonData);
+      statsEl.textContent=`${c.keys} 个键 · ${c.leaves} 个值 · ${c.total} 个节点`;
+    }
   }
   function countNodes(obj) {
     let keys=0,leaves=0,total=1;
@@ -493,7 +571,16 @@
     wrapper.appendChild(hl);
     const cc=document.createElement('div');cc.className='json-children';cc.style.paddingLeft='20px';
     const entries=isArray?value.map((v,i)=>[String(i),v]):Object.entries(value);
-    entries.forEach(([k,v])=>{const cp=path?`${path}.${k}`:k;cc.appendChild(buildNode(v,cp,k));});
+    const MAX_CHILDREN=1000;
+    if(entries.length>MAX_CHILDREN){
+      for(let i=0;i<MAX_CHILDREN;i++){const[k,v]=entries[i];const cp=path?`${path}.${k}`:k;cc.appendChild(buildNode(v,cp,k));}
+      const more=document.createElement('div');more.className='json-line';
+      more.style.cssText='color:var(--text-secondary);font-style:italic;padding-left:22px;';
+      more.textContent=`… 还有 ${entries.length-MAX_CHILDREN} 项已隐藏（共 ${entries.length} 项）`;
+      cc.appendChild(more);
+    }else{
+      entries.forEach(([k,v])=>{const cp=path?`${path}.${k}`:k;cc.appendChild(buildNode(v,cp,k));});
+    }
     wrapper.appendChild(cc);
     if(collapsedPaths.has(path)){toggle.classList.add('collapsed');cc.style.display='none';ph.style.display='inline';}else{ph.style.display='none';}
     hl.addEventListener('click',e=>{if(e.target.classList.contains('toggle')||e.target.classList.contains('copy-block-btn'))return;selectNode(path,keyName,hl);});
@@ -526,7 +613,70 @@
   function clearAll(){
     inputEl.value='';jsonData=null;activePath=null;collapsedPaths.clear();
     treeContainer.innerHTML='<div class="empty-state">← 在左侧粘贴 JSON，自动解析展示</div>';
-    statusIcon.textContent='';statusText.textContent='等待输入...';statsEl.textContent='';closeSearch();
+    statusIcon.textContent='';statusText.textContent='等待输入...';statsEl.textContent='';
+    currentFileName=null; fileNameTag.style.display='none'; closeSearch();
+  }
+
+  // ===== 文件导入 =====
+  function openFileDialog(){ fileInput.value=''; fileInput.click(); }
+
+  function handleFileSelect(e){
+    const file=e.target.files[0];
+    if(file) loadFile(file);
+  }
+
+  function loadFile(file){
+    const reader=new FileReader();
+    // 如果右侧面板收起，先展开
+    if(rightCollapsed) toggleRightPanel();
+    loadingOverlay.classList.remove('hidden');
+    inputEl.value='';  // 加载时先清空左侧原有内容
+    treeContainer.innerHTML='<div class="empty-state">导入中…</div>';  // 右侧同步清空
+    statsEl.textContent='';  // 清空统计信息
+    updateStatus('ok','⏳','正在读取文件...');
+    reader.onload=function(){
+      try{
+        let text=reader.result;
+        // 处理 BOM
+        if(text.charCodeAt(0)===0xFEFF) text=text.slice(1);
+        inputEl.value=text;
+        currentFileName=file.name;
+        fileNameTag.textContent='📄 '+file.name;
+        fileNameTag.style.display='inline-flex';
+        parseAndRender();
+        updateStatus('ok','✅','JSON 解析成功');
+      }catch(e){
+        treeContainer.innerHTML=`<div class="empty-state" style="color:var(--error);">❌ 处理失败：${escapeHtml(e.message)}</div>`;
+        updateStatus('error','❌','处理失败');
+      }finally{
+        loadingOverlay.classList.add('hidden');
+      }
+    };
+    reader.onerror=function(){
+      loadingOverlay.classList.add('hidden');
+      updateStatus('error','❌','文件读取失败');
+    };
+    reader.readAsText(file,'UTF-8');
+  }
+
+  function detectHAR(data){
+    try{
+      if(data&&data.log&&Array.isArray(data.log.entries)){
+        const entries=data.log.entries;
+        const methods={},statusCodes={},domains=new Set();
+        entries.forEach(e=>{
+          const req=e.request||{};
+          const res=e.response||{};
+          const m=req.method||'UNKNOWN';
+          methods[m]=(methods[m]||0)+1;
+          const s=String(res.status||'?');
+          statusCodes[s]=(statusCodes[s]||0)+1;
+          try{ if(req.url) domains.add(new URL(req.url).hostname); }catch(_){}
+        });
+        return {isHAR:true, total:entries.length, methods, statusCodes, domainCount:domains.size};
+      }
+    }catch(_){}
+    return {isHAR:false};
   }
   function copyToClipboard(text){
     navigator.clipboard.writeText(text).then(()=>{
@@ -537,13 +687,85 @@
   }
 
   // ===== 搜索 =====
-  function toggleSearch(){if(searchBar.style.display==='none'){searchBar.style.display='flex';searchInput.focus();}else closeSearch();}
-  function closeSearch(){searchBar.style.display='none';searchInput.value='';searchTerm='';searchResults=[];searchIndex=-1;searchInfo.textContent='';clearHighlights();}
+  let searchDebounceTimer = null;
+  let searchKeysOnly = false;
+  function toggleSearchKeysOnly(){
+    searchKeysOnly = !searchKeysOnly;
+    const btn = document.getElementById('searchKeyBtn');
+    btn.classList.toggle('active', searchKeysOnly);
+    btn.title = searchKeysOnly ? '搜索键和值（当前：只匹配键）' : '只匹配键名';
+    doSearch();
+  }
+  function debouncedSearch(){
+    clearTimeout(searchDebounceTimer);
+    searchDebounceTimer = setTimeout(doSearch, 300);
+  }
+  function toggleSearch(){
+    if(searchBar.style.display==='none'){
+      // 如果右侧收起，先展开
+      if(rightCollapsed) toggleRightPanel();
+      searchBar.style.display='flex';searchInput.focus();
+    }else closeSearch();
+  }
+  function closeSearch(){
+    searchBar.style.display='none';searchInput.value='';searchTerm='';searchResults=[];searchIndex=-1;searchInfo.textContent='';clearHighlights();
+    if(wasSearchMode){ wasSearchMode=false; collapsedPaths.clear(); renderTreeWithState(); }
+  }
   function doSearch(){
     searchTerm=searchInput.value.trim().toLowerCase();searchResults=[];searchIndex=-1;clearHighlights();
-    if(!searchTerm||!jsonData){searchInfo.textContent='';return;}
-    treeContainer.querySelectorAll('.json-line').forEach(l=>{if(l.textContent.toLowerCase().includes(searchTerm))searchResults.push(l);});
-    if(searchResults.length>0){searchIndex=0;highlightCurrent();searchInfo.textContent=`1 / ${searchResults.length}`;}else searchInfo.textContent='无结果';
+    if(!searchTerm||!jsonData){searchInfo.textContent='';
+      if(wasSearchMode){ wasSearchMode=false; collapsedPaths.clear(); renderTreeWithState(); }
+      return;
+    }
+    if(rightCollapsed) toggleRightPanel();
+    // 收集匹配行，限制最大数量避免卡顿
+    const maxResults = 200;
+    if(searchKeysOnly){
+      // 只搜索键名
+      const allKeys = treeContainer.querySelectorAll('.json-key');
+      for(let i=0; i<allKeys.length && searchResults.length < maxResults; i++){
+        if(allKeys[i].textContent.toLowerCase().includes(searchTerm))
+          searchResults.push(allKeys[i].closest('.json-line'));
+      }
+    }else{
+      // 搜索键和值
+      const allLines = treeContainer.querySelectorAll('.json-line');
+      for(let i=0; i<allLines.length && searchResults.length < maxResults; i++){
+        if(allLines[i].textContent.toLowerCase().includes(searchTerm)) searchResults.push(allLines[i]);
+      }
+    }
+    if(searchResults.length>0){
+      searchIndex=0; wasSearchMode=true;
+      smartExpandForSearch();
+      // 重建后重新收集匹配行
+      const newLines = treeContainer.querySelectorAll(searchKeysOnly ? '.json-key' : '.json-line');
+      searchResults=[];
+      if(searchKeysOnly){
+        for(let i=0; i<newLines.length && searchResults.length < maxResults; i++){
+          if(newLines[i].textContent.toLowerCase().includes(searchTerm))
+            searchResults.push(newLines[i].closest('.json-line'));
+        }
+      }else{
+        for(let i=0; i<newLines.length && searchResults.length < maxResults; i++){
+          if(newLines[i].textContent.toLowerCase().includes(searchTerm)) searchResults.push(newLines[i]);
+        }
+      }
+      searchInfo.textContent=`1 / ${searchResults.length}`+ (searchResults.length===maxResults ? ' (已截断)' : '');
+      if(searchResults.length>0) highlightCurrent();
+    }else{ searchInfo.textContent='无结果'; }
+  }
+  function smartExpandForSearch(){
+    if(!jsonData||!searchResults.length) return;
+    const expandPaths=new Set();
+    searchResults.forEach(line=>{
+      const p=line.dataset.path;
+      if(!p){ expandPaths.add(''); return; }
+      const parts=p.split('.');
+      for(let i=1;i<=parts.length;i++) expandPaths.add(parts.slice(0,i).join('.'));
+    });
+    collapsedPaths.clear(); collectAllPaths(jsonData,'');
+    expandPaths.forEach(p=>collapsedPaths.delete(p));
+    renderTree();
   }
   function searchNext(){if(!searchResults.length)return;searchIndex=(searchIndex+1)%searchResults.length;highlightCurrent();searchInfo.textContent=`${searchIndex+1} / ${searchResults.length}`;}
   function searchPrev(){if(!searchResults.length)return;searchIndex=(searchIndex-1+searchResults.length)%searchResults.length;highlightCurrent();searchInfo.textContent=`${searchIndex+1} / ${searchResults.length}`;}
@@ -553,18 +775,92 @@
   function escapeHtml(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML;}
   function CSSescape(s){return String(s).replace(/([^\w-])/g,'\\$1');}
 
+  // ===== 拖拽导入 =====
+  function handleDragEnter(e){ e.preventDefault(); e.stopPropagation(); dragCounter++; dropOverlay.classList.add('active'); }
+  function handleDragLeave(e){ e.preventDefault(); e.stopPropagation(); dragCounter--; if(dragCounter<=0){ dragCounter=0; dropOverlay.classList.remove('active'); } }
+  function handleDragOver(e){ e.preventDefault(); e.stopPropagation(); }
+  function handleDrop(e){
+    e.preventDefault(); e.stopPropagation();
+    dragCounter=0; dropOverlay.classList.remove('active');
+    const files=e.dataTransfer.files;
+    if(files.length>0){
+      const file=files[0];
+      const ext=file.name.split('.').pop().toLowerCase();
+      const allowed=['json','har','txt','js','jsonc'];
+      if(allowed.includes(ext)||file.type==='application/json'||file.type==='application/har'||file.type==='text/plain'){
+        loadFile(file);
+      }else{
+        updateStatus('error','❌','不支持的文件类型：.'+ext);
+      }
+    }
+  }
+  document.addEventListener('dragenter',handleDragEnter,false);
+  document.addEventListener('dragleave',handleDragLeave,false);
+  document.addEventListener('dragover',handleDragOver,false);
+  document.addEventListener('drop',handleDrop,false);
+
+  // ===== Electron 文件关联（命令行 / 双击打开） =====
+  if(window.electronAPI){
+    window.electronAPI.getInitialFile().then(data=>{
+      if(data&&data.content){
+        if(rightCollapsed) toggleRightPanel();
+        loadingOverlay.classList.remove('hidden');
+        inputEl.value=data.content;
+        treeContainer.innerHTML='<div class="empty-state">导入中…</div>';
+        statsEl.textContent='';
+        currentFileName=data.name;
+        fileNameTag.textContent='📄 '+data.name;
+        fileNameTag.style.display='inline-flex';
+        parseAndRender();
+        loadingOverlay.classList.add('hidden');
+        updateStatus('ok','✅','JSON 解析成功');
+      }
+    });
+    window.electronAPI.onFileOpened(data=>{
+      if(data&&data.content){
+        if(rightCollapsed) toggleRightPanel();
+        loadingOverlay.classList.remove('hidden');
+        inputEl.value=data.content;
+        treeContainer.innerHTML='<div class="empty-state">导入中…</div>';
+        statsEl.textContent='';
+        currentFileName=data.name;
+        fileNameTag.textContent='📄 '+data.name;
+        fileNameTag.style.display='inline-flex';
+        parseAndRender();
+        loadingOverlay.classList.add('hidden');
+        updateStatus('ok','✅','JSON 解析成功');
+      }
+    });
+  }
+
   const animStyle=document.createElement('style');
   animStyle.textContent='@keyframes fadeOut{0%,60%{opacity:1}100%{opacity:0}}';
   document.head.appendChild(animStyle);
 
-  // 初始示例
-  const sample = {
-    "name": "JSON 阅读器",
-    "version": "2.1.0",
-    "config": { "theme": "light", "autoParse": true, "indentSize": 2 },
-    "stats": { "users": 1024, "active": true }
+  // 初始展示：版本号 + 功能说明
+  const defaultData = {
+    "app": "JSON 阅读器",
+    "version": "1.1.0",
+    "description": "树形结构查看 JSON / HAR 文件的桌面工具",
+    "features": {
+      "fileImport": "支持打开 .json / .har / .txt / .jsonc 文件（Ctrl+O）",
+      "dragDrop": "拖拽文件到窗口直接打开",
+      "search": "搜索键名或值，自动高亮定位（Ctrl+F）",
+      "harAnalysis": "HAR 文件识别与请求统计",
+      "format": "一键格式化（Ctrl+Shift+F）",
+      "compress": "一键压缩（Ctrl+Shift+C）",
+      "theme": "浅色 / 深色主题切换"
+    },
+    "shortcuts": {
+      "openFile": "Ctrl + O",
+      "search": "Ctrl + F",
+      "format": "Ctrl + Shift + F",
+      "compress": "Ctrl + Shift + C",
+      "expandAll": "全部展开",
+      "collapseAll": "全部收拢"
+    }
   };
-  inputEl.value = JSON.stringify(sample, null, 2);
+  inputEl.value = JSON.stringify(defaultData, null, 2);
   parseAndRender();
 </script>
 </body>
