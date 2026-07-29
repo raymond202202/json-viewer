@@ -2,7 +2,15 @@
 
 > 粘贴 JSON 即可展开/收拢查看的轻量级桌面工具。
 
-## 功能
+---
+
+[English](#english) | [中文](#中文)
+
+---
+
+## 中文
+
+### 功能
 
 | 功能 | 说明 | 快捷键 |
 |------|------|--------|
@@ -138,7 +146,7 @@ MIT
 
 ---
 
-## 🔍 JSON Viewer (English)
+## English
 
 A lightweight desktop tool for viewing and navigating JSON data with a tree structure.
 
