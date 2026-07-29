@@ -618,6 +618,28 @@
   }
 
   // ===== 文件导入 =====
+  const LARGE_FILE_THRESHOLD = 50000; // 50KB 以上大文件不进 textarea
+
+  // 大文件直接解析，不写 textarea
+  function parseDirect(text, fileName) {
+    try {
+      jsonData = JSON.parse(text);
+      const stats = countNodes(jsonData);
+      collapsedPaths.clear(); activePath=null;
+      if(stats.total > 500) {
+        collectAllPaths(jsonData, '');
+        renderTreeWithState();
+      } else {
+        renderTree();
+      }
+      updateStatus('ok','✅','JSON 解析成功'); updateStats();
+    } catch(e) {
+      jsonData=null; activePath=null;
+      treeContainer.innerHTML=`<div class="empty-state" style="color:var(--error);">❌ 解析失败：${escapeHtml(e.message)}</div>`;
+      updateStatus('error','❌','JSON 格式错误'); statsEl.textContent='';
+    }
+  }
+
   function openFileDialog(){ fileInput.value=''; fileInput.click(); }
 
   function handleFileSelect(e){
@@ -633,18 +655,28 @@
     inputEl.value='';  // 加载时先清空左侧原有内容
     treeContainer.innerHTML='<div class="empty-state">导入中…</div>';  // 右侧同步清空
     statsEl.textContent='';  // 清空统计信息
+    currentFileName=file.name;
+    fileNameTag.textContent='📄 '+file.name;
+    fileNameTag.style.display='inline-flex';
     updateStatus('ok','⏳','正在读取文件...');
     reader.onload=function(){
       try{
         let text=reader.result;
         // 处理 BOM
         if(text.charCodeAt(0)===0xFEFF) text=text.slice(1);
-        inputEl.value=text;
-        currentFileName=file.name;
-        fileNameTag.textContent='📄 '+file.name;
-        fileNameTag.style.display='inline-flex';
-        parseAndRender();
-        updateStatus('ok','✅','JSON 解析成功');
+        const isLarge = file.size > LARGE_FILE_THRESHOLD;
+        if(isLarge){
+          // 大文件：不写 textarea，直接解析渲染树
+          inputEl.value = '';
+          inputEl.placeholder = `文件已加载（${(file.size/1024/1024).toFixed(1)} MB），在右侧查看解析结果`;
+          parseDirect(text, file.name);
+          updateStatus('ok','✅','大文件加载完成');
+        }else{
+          // 小文件：正常显示在 textarea
+          inputEl.value = text;
+          parseAndRender();
+          updateStatus('ok','✅','JSON 解析成功');
+        }
       }catch(e){
         treeContainer.innerHTML=`<div class="empty-state" style="color:var(--error);">❌ 处理失败：${escapeHtml(e.message)}</div>`;
         updateStatus('error','❌','处理失败');
@@ -805,30 +837,44 @@
       if(data&&data.content){
         if(rightCollapsed) toggleRightPanel();
         loadingOverlay.classList.remove('hidden');
-        inputEl.value=data.content;
         treeContainer.innerHTML='<div class="empty-state">导入中…</div>';
         statsEl.textContent='';
         currentFileName=data.name;
         fileNameTag.textContent='📄 '+data.name;
         fileNameTag.style.display='inline-flex';
-        parseAndRender();
+        if(data.content.length > LARGE_FILE_THRESHOLD){
+          inputEl.value = '';
+          inputEl.placeholder = `文件已加载（${(data.content.length/1024/1024).toFixed(1)} MB），在右侧查看解析结果`;
+          parseDirect(data.content, data.name);
+          updateStatus('ok','✅','大文件加载完成');
+        }else{
+          inputEl.value=data.content;
+          parseAndRender();
+          updateStatus('ok','✅','JSON 解析成功');
+        }
         loadingOverlay.classList.add('hidden');
-        updateStatus('ok','✅','JSON 解析成功');
       }
     });
     window.electronAPI.onFileOpened(data=>{
       if(data&&data.content){
         if(rightCollapsed) toggleRightPanel();
         loadingOverlay.classList.remove('hidden');
-        inputEl.value=data.content;
         treeContainer.innerHTML='<div class="empty-state">导入中…</div>';
         statsEl.textContent='';
         currentFileName=data.name;
         fileNameTag.textContent='📄 '+data.name;
         fileNameTag.style.display='inline-flex';
-        parseAndRender();
+        if(data.content.length > LARGE_FILE_THRESHOLD){
+          inputEl.value = '';
+          inputEl.placeholder = `文件已加载（${(data.content.length/1024/1024).toFixed(1)} MB），在右侧查看解析结果`;
+          parseDirect(data.content, data.name);
+          updateStatus('ok','✅','大文件加载完成');
+        }else{
+          inputEl.value=data.content;
+          parseAndRender();
+          updateStatus('ok','✅','JSON 解析成功');
+        }
         loadingOverlay.classList.add('hidden');
-        updateStatus('ok','✅','JSON 解析成功');
       }
     });
   }
