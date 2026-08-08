@@ -581,22 +581,24 @@ void MainWindow::collapseAll()
     m_tree->collapseAll();
 }
 
-// ── 面板折叠（互斥）──
+// ── 面板折叠（互斥；对齐老版：左折叠 width:0 / 右折叠 display:none，均彻底收起）──
 void MainWindow::toggleLeftPanel()
 {
     if (m_rightCollapsed) return;
     m_leftCollapsed = !m_leftCollapsed;
     if (m_leftCollapsed) {
-        m_splitter->setSizes({0, 1000});
+        m_leftPanel->setVisible(false);   // 彻底收起（QSplitter 自动把空间让给右侧）
         m_leftEdgeBtn->setText("▶");
         m_leftEdgeBtn->setToolTip("展开左侧");
         m_rightEdgeBtn->setEnabled(false);
     } else {
-        m_splitter->setSizes({1, 1});
+        m_leftPanel->setVisible(true);
         m_leftEdgeBtn->setText("◀");
         m_leftEdgeBtn->setToolTip("收起左侧");
         m_rightEdgeBtn->setEnabled(true);
+        m_splitter->setSizes({1, 1});     // 恢复等宽
     }
+    positionEdgeButtons();
 }
 
 void MainWindow::toggleRightPanel()
@@ -604,16 +606,18 @@ void MainWindow::toggleRightPanel()
     if (m_leftCollapsed) return;
     m_rightCollapsed = !m_rightCollapsed;
     if (m_rightCollapsed) {
-        m_splitter->setSizes({1000, 0});
+        m_rightPanel->setVisible(false);  // 彻底收起
         m_rightEdgeBtn->setText("◀");
         m_rightEdgeBtn->setToolTip("展开右侧");
         m_leftEdgeBtn->setEnabled(false);
     } else {
-        m_splitter->setSizes({1, 1});
+        m_rightPanel->setVisible(true);
         m_rightEdgeBtn->setText("▶");
         m_rightEdgeBtn->setToolTip("收起右侧");
         m_leftEdgeBtn->setEnabled(true);
+        m_splitter->setSizes({1, 1});     // 恢复等宽
     }
+    positionEdgeButtons();
 }
 
 void MainWindow::resizeEvent(QResizeEvent *event)
