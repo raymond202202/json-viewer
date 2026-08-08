@@ -125,12 +125,8 @@ void JsonTreeModel::computeStats()
 QString JsonTreeModel::valueText(const QJsonValue &v) const
 {
     switch (v.type()) {
-    case QJsonValue::String: {
-        // 转义序列化：["..."] 去头尾 = 带引号的字符串字面量
-        const QByteArray arr = QJsonDocument(QJsonArray{QJsonValue(v.toString())})
-                                   .toJson(QJsonDocument::Compact);
-        return QString::fromUtf8(arr.mid(1, arr.size() - 2));
-    }
+    case QJsonValue::String:
+        return escapeJsonString(v.toString());
     case QJsonValue::Double:
         return QString::number(v.toDouble(), 'g', 17);
     case QJsonValue::Bool:
@@ -140,6 +136,32 @@ QString JsonTreeModel::valueText(const QJsonValue &v) const
     default:
         return QString();
     }
+}
+
+// 紧凑 JSON 字符串转义（比 QJsonDocument 包装序列化更快，避免临时对象）
+QString JsonTreeModel::escapeJsonString(const QString &s)
+{
+    QString out;
+    out.reserve(s.size() + 8);
+    out += '"';
+    for (const QChar &c : s) {
+        switch (c.unicode()) {
+        case '"':  out += "\\\""; break;
+        case '\\': out += "\\\\"; break;
+        case '\b': out += "\\b"; break;
+        case '\f': out += "\\f"; break;
+        case '\n': out += "\\n"; break;
+        case '\r': out += "\\r"; break;
+        case '\t': out += "\\t"; break;
+        default:
+            if (c.unicode() < 0x20)
+                out += QString("\\u%1").arg(int(c.unicode()), 4, 16, QLatin1Char('0'));
+            else
+                out += c;
+        }
+    }
+    out += '"';
+    return out;
 }
 
 quint64 JsonTreeModel::allocNode(quint64 parentId, const QString &key, NodeType type,
@@ -165,7 +187,6 @@ void JsonTreeModel::loadChildren(quint64 id)
 {
     // 注意：不要持有 Node& 跨 m_nodes.insert() —— insert 可能触发 rehash 使引用失效
     if (m_nodes.value(id).childrenLoaded) return;
-    m_nodes[id].childrenLoaded = true;
 
     const Node src = m_nodes.value(id);   // 拷贝，后续 insert 不影响
     QVector<quint64> ids;
@@ -209,6 +230,7 @@ void JsonTreeModel::loadChildren(quint64 id)
     }
 
     m_nodes[id].children = ids;   // 重新获取引用，写入最终结果
+    m_nodes[id].childrenLoaded = true;  // 全部构建成功后才置位
 }
 
 QModelIndex JsonTreeModel::index(int row, int column, const QModelIndex &parent) const
@@ -283,6 +305,8 @@ QVariant JsonTreeModel::data(const QModelIndex &index, int role) const
         return n.path;
     case RawRole:
         return QVariant::fromValue(n.value);
+    case ChildCountRole:
+        return n.childCount;
     default:
         return QVariant();
     }

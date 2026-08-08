@@ -16,7 +16,8 @@ public:
         ValueTextRole,                // 值显示文本（叶子）
         KeyNameRole,                  // 键名（联动定位用，与 KeyRole 相同）
         PathRole,                     // 点分路径（root.a.b.0）
-        RawRole                       // QJsonValue
+        RawRole,                      // QJsonValue
+        ChildCountRole                // 真实子项数（含未加载/截断部分）
     };
 
     static constexpr int MaxChildren = 1000;
@@ -40,6 +41,9 @@ public:
 
     // 工具：按路径定位索引（自动触发沿路径的懒加载）
     QModelIndex indexForPath(const QString &path);
+
+    // 紧凑 JSON 字符串转义（供 MainWindow 搜索显示共用）
+    static QString escapeJsonString(const QString &s);
 
     // QAbstractItemModel
     QModelIndex index(int row, int column, const QModelIndex &parent = QModelIndex()) const override;

@@ -81,7 +81,8 @@ void JsonTreeDelegate::paint(QPainter *painter, const QStyleOptionViewItem &opti
     const int type = index.data(JsonTreeModel::TypeRole).toInt();
     const QString key = index.data(JsonTreeModel::KeyRole).toString();
     const QString valueText = index.data(JsonTreeModel::ValueTextRole).toString();
-    const int childCount = index.model()->rowCount(index);
+    // 真实子项数（含未加载/截断部分），与 Object/Array 显示一致
+    const int childCount = index.data(JsonTreeModel::ChildCountRole).toInt();
     const bool isContainer = (type == JsonTreeModel::Object || type == JsonTreeModel::Array);
 
     // 文本颜色（Truncated 整行 placeholder 色）

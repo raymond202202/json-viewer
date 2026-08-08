@@ -538,7 +538,7 @@ void MainWindow::loadFile(const QString &path)
         m_input->setPlaceholderText(QString("文件已加载（%1 MB），在右侧查看解析结果")
                                         .arg(fi.size() / 1024.0 / 1024.0, 0, 'f', 1));
         parseDirect(text, fi.fileName());
-        updateStatus("ok", "✅", "大文件加载完成");
+        updateStatus("ok", "🔒", "大文件加载完成 · 仅查看模式");
     } else {
         m_input->setPlaceholderText("在此粘贴 JSON 内容，或拖拽文件到窗口...");
         m_input->setPlainText(text);
@@ -891,6 +891,8 @@ void MainWindow::doSearch()
     collectSearchHits(m_jsonData, QString(), m_searchTerm, m_searchKeysOnly, hits);
     for (const auto &h : hits) {
         if (m_searchResults.size() >= MaxSearchResults) break;
+        // 截断区（>1000 子项被隐藏）无法通过模型定位，跳过 —— 对齐老版"只搜已渲染内容"
+        if (!m_model->indexForPath(h.first).isValid()) continue;
         m_searchResults << h.first;
     }
 
@@ -958,11 +960,8 @@ void MainWindow::collectSearchHits(const QJsonValue &v, const QString &path,
 QString MainWindow::valueTextOf(const QJsonValue &v)
 {
     switch (v.type()) {
-    case QJsonValue::String: {
-        const QByteArray arr = QJsonDocument(QJsonArray{QJsonValue(v.toString())})
-                                   .toJson(QJsonDocument::Compact);
-        return QString::fromUtf8(arr.mid(1, arr.size() - 2));
-    }
+    case QJsonValue::String:
+        return JsonTreeModel::escapeJsonString(v.toString());
     case QJsonValue::Double:
         return QString::number(v.toDouble(), 'g', 17);
     case QJsonValue::Bool:
