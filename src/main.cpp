@@ -48,8 +48,10 @@ int main(int argc, char *argv[])
 
     QLocalServer::removeServer(kServerName);
     QLocalServer server;
-    const bool listening = server.listen(kServerName);
-    Q_UNUSED(listening);
+    if (!server.listen(kServerName)) {
+        // 降级：监听失败时仅提示，不阻止启动（应用无数据冲突，双实例无害）
+        qWarning() << "单实例监听失败，未启用单实例保护（socket 可能被占用）";
+    }
 
     MainWindow window;
     window.show();
