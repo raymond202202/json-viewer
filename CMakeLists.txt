@@ -1,0 +1,31 @@
+cmake_minimum_required(VERSION 3.16)
+project(json-viewer-qt VERSION 1.1.0 LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTORCC ON)
+set(CMAKE_AUTOUIC ON)
+
+find_package(Qt6 REQUIRED COMPONENTS Widgets Network)
+
+qt_standard_project_setup()
+
+qt_add_executable(json-viewer-qt
+    src/main.cpp
+    src/MainWindow.cpp
+    src/MainWindow.h
+    src/JsonTreeModel.cpp
+    src/JsonTreeModel.h
+    src/JsonTreeDelegate.cpp
+    src/JsonTreeDelegate.h
+    resources/resources.qrc
+)
+
+target_link_libraries(json-viewer-qt PRIVATE Qt6::Widgets Qt6::Network)
+
+# 安装规则（RPM 打包用）
+include(GNUInstallDirs)
+install(TARGETS json-viewer-qt RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(FILES resources/icon.png DESTINATION ${CMAKE_INSTALL_DATADIR}/json-viewer-qt)
+install(FILES packaging/json-viewer-qt.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
