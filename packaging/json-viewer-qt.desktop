@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=JSON阅读器
+Name[en]=JSON Viewer
+Comment=轻量级 JSON 阅读器（Qt 版）
+Exec=json-viewer-qt %F
+Icon=json-viewer-qt
+Terminal=false
+Categories=Utility;Development;
+StartupWMClass=json-viewer-qt
+MimeType=application/json;application/har;text/plain;

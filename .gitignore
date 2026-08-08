@@ -1,5 +1,5 @@
-node_modules/
-dist/
-*.exe
+build/
+*.o
+*.rpm
 .DS_Store
 Thumbs.db

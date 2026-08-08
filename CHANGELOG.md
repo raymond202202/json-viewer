@@ -1,5 +1,31 @@
 # Changelog
 
+## v2.0.0 (2026-08-08)
+
+### 重大变更：Electron → Qt 6 重写
+- **技术栈**：Electron 33 + HTML/JS → **Qt 6 Widgets + C++（CMake）**
+- **性能**：空闲内存 **724 MB → 88 MB**（约省 8 倍），进程数 10 → 1，二进制 186 MB → 275 KB
+- **懒加载树模型**：子节点按需 fetchMore，超大 JSON 滚动流畅
+- **大文件直载**：>50KB 不进编辑框直接解析树，>1000 子项自动截断
+- **功能 1:1 对齐**：粘贴解析 / 拖放 / 文件对话框 / 搜索(键值/仅键名/智能展开) / 格式化 / 压缩 / 复制(值/键值对/整块/路径) / 花括号联动 / 面板折叠 / 主题切换(QSS) / HAR 统计 / 命令行 / 单实例
+- **打包**：RPM（89 KB）/ .desktop 桌面入口
+
+### 文件变更
+| 文件 | 说明 |
+|------|------|
+| `CMakeLists.txt` | **新建** - CMake 构建（Qt6 Widgets + Network） |
+| `src/main.cpp` | **新建** - 入口 + 单实例(QLocalServer) + 命令行参数 |
+| `src/MainWindow.*` | **新建** - 主窗口（工具栏/搜索/主题/拖放/联动/复制） |
+| `src/JsonTreeModel.*` | **新建** - 懒加载树模型 |
+| `src/JsonTreeDelegate.*` | **新建** - 彩色渲染 + 搜索/激活高亮 |
+| `resources/styles/*.qss` | **新建** - 亮/暗主题 |
+| `packaging/` | **新建** - RPM spec + .desktop |
+| `tests/` | **新建** - 模型自测（19 断言） |
+| `.github/workflows/release.yml` | **新建** - CI + Release（tag v* 触发） |
+| `index.html` / `main.js` / `preload.js` 等 | **移除** - Electron 版（保留在 git 历史 tag v1.1.0） |
+
+---
+
 ## v1.1.0 (2026-07-29)
 
 ### 新增功能
