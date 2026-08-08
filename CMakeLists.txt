@@ -11,18 +11,24 @@ find_package(Qt6 REQUIRED COMPONENTS Widgets Network)
 
 qt_standard_project_setup()
 
+# ── 共享库 libs/json-view（Pulse-qt 等可复用）──
+add_library(jsonview STATIC
+    lib/JsonTreeModel.cpp
+    lib/JsonTreeModel.h
+    lib/JsonTreeDelegate.cpp
+    lib/JsonTreeDelegate.h
+)
+target_include_directories(jsonview PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/lib)
+target_link_libraries(jsonview PUBLIC Qt6::Widgets)
+
 qt_add_executable(json-viewer-qt
     src/main.cpp
     src/MainWindow.cpp
     src/MainWindow.h
-    src/JsonTreeModel.cpp
-    src/JsonTreeModel.h
-    src/JsonTreeDelegate.cpp
-    src/JsonTreeDelegate.h
     resources/resources.qrc
 )
 
-target_link_libraries(json-viewer-qt PRIVATE Qt6::Widgets Qt6::Network)
+target_link_libraries(json-viewer-qt PRIVATE jsonview Qt6::Widgets Qt6::Network)
 
 # 版本号统一注入：开屏示例数据从 CMake VERSION 读取，避免与 tag 漂移
 target_compile_definitions(json-viewer-qt PRIVATE APP_VERSION="${PROJECT_VERSION}")
