@@ -89,7 +89,7 @@ MainWindow::MainWindow(QWidget *parent)
     };
     const QJsonObject defaultData{
         {"app", "JSON 阅读器"},
-        {"version", "1.1.0"},
+        {"version", "2.0.2"},
         {"description", "树形结构查看 JSON / HAR 文件的桌面工具（Qt 版）"},
         {"features", features},
         {"shortcuts", shortcuts},
