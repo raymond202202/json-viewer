@@ -1,5 +1,5 @@
 Name:           json-viewer-qt
-Version:        2.0.2
+Version:        2.0.4
 Release:        1%{?dist}
 Summary:        轻量级 JSON 阅读器（Qt 版）— 粘贴/打开 JSON 以树形结构查看
 

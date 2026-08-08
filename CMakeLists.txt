@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(json-viewer-qt VERSION 2.0.2 LANGUAGES CXX)
+project(json-viewer-qt VERSION 2.0.4 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -23,6 +23,9 @@ qt_add_executable(json-viewer-qt
 )
 
 target_link_libraries(json-viewer-qt PRIVATE Qt6::Widgets Qt6::Network)
+
+# 版本号统一注入：开屏示例数据从 CMake VERSION 读取，避免与 tag 漂移
+target_compile_definitions(json-viewer-qt PRIVATE APP_VERSION="${PROJECT_VERSION}")
 
 # 安装规则（RPM 打包用）
 include(GNUInstallDirs)
