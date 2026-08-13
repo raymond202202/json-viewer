@@ -46,3 +46,35 @@ jobs:
         with:
           files: dist/*
           generate_release_notes: true
+
+  # —— Release: Windows 构建（tag 触发，报告建议：让 Windows 用户免装环境直接拿二进制）——
+  release-windows:
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Qt6 (aqtinstall)
+        shell: bash
+        run: |
+          pip install aqtinstall
+          aqt install-qt --timeout 60 windows desktop 6.5.3 win64_msvc2019_64 -O "$RUNNER_TEMP/Qt"
+      - name: Configure & Build (MSVC)
+        shell: bash
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release \
+                -DCMAKE_PREFIX_PATH="$RUNNER_TEMP/Qt/6.5.3/msvc2019_64"
+          cmake --build build --config Release -j2
+      - name: Package with windeployqt
+        shell: bash
+        run: |
+          export PATH="$RUNNER_TEMP/Qt/6.5.3/msvc2019_64/bin:$PATH"
+          mkdir -p dist
+          cp build/Release/json-viewer-qt.exe dist/
+          cd dist
+          windeployqt json-viewer-qt.exe --release --no-translations
+          cd ..
+          powershell -Command "Compress-Archive -Path dist/* -DestinationPath json-viewer-qt-win-x64.zip"
+      - name: Upload Release Asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: json-viewer-qt-win-x64.zip

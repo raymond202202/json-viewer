@@ -25,6 +25,14 @@ public:
 
     void openFile(const QString &path);
 
+    // path 逐级定位工具（无状态纯函数，供测试直接调用验证）
+    static int skipJsonSpace(const QString &text, int pos);
+    static int findKeyInObjectRange(const QString &text, int start, int end,
+                                    const QString &key, int *valStart);
+    static int findArrayElementInRange(const QString &text, int start, int end,
+                                       int index, int *elemStart);
+    static int findMatchingBracketEnd(const QString &text, int openPos);
+
 protected:
     void dragEnterEvent(QDragEnterEvent *event) override;
     void dragLeaveEvent(QDragLeaveEvent *event) override;
@@ -74,7 +82,6 @@ private:
                            bool keysOnly, QList<QPair<QString, QString>> &out) const;
     static QString valueTextOf(const QJsonValue &v);
     static QJsonDocument docFromValue(const QJsonValue &v);
-    static int findMatchingBracketEnd(const QString &text, int openPos);
     QModelIndex currentIndex() const;
 
     bool m_leftCollapsed = false;

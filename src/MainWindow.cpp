@@ -670,6 +670,7 @@ void MainWindow::onTreeClicked(const QModelIndex &index)
 
 void MainWindow::highlightInTextEdit(const QString &path, const QString &keyName)
 {
+    Q_UNUSED(keyName); // 逐级定位以 path 段为准（path 与 key 完全一致）
     const QString text = m_input->toPlainText();
     if (path.isEmpty() || path == "root") {
         m_input->setFocus();
@@ -679,36 +680,69 @@ void MainWindow::highlightInTextEdit(const QString &path, const QString &keyName
         m_input->setTextCursor(cur);
         return;
     }
-    const QString searchKey = "\"" + keyName + "\"";
-    int keyIdx = text.indexOf(searchKey);
-    if (keyIdx < 0) return;
 
-    int pos = keyIdx + searchKey.length();
-    while (pos < text.length() && text[pos].isSpace()) pos++;
-    if (pos >= text.length() || text[pos] != ':') return;
-    pos++;
-    while (pos < text.length() && text[pos].isSpace()) pos++;
-    if (pos >= text.length()) return;
+    // 按 path 逐级定位，修复同名键（如多个 id）时 indexOf 只命中第一个的高亮错误
+    // path 格式: data.items.0.created_by.id —— 数字段为数组索引，其余为对象键
+    const QStringList segs = path.split('.', Qt::SkipEmptyParts);
+    if (segs.isEmpty()) return;
 
-    const QChar ch = text[pos];
-    int endPos = pos;
+    const int rootPos = skipJsonSpace(text, 0);
+    if (rootPos >= text.length() || (text[rootPos] != '{' && text[rootPos] != '[')) return;
+
+    int scopeStart = rootPos;      // 当前容器起始（'{' 或 '['）
+    int scopeEnd = text.length();  // 当前容器范围上界
+    int finalKeyStart = -1;        // 目标键的起始位置
+    int finalValStart = -1;        // 目标值的起始位置
+
+    for (int i = 0; i < segs.size(); ++i) {
+        const QString &seg = segs[i];
+        const bool isLast = (i == segs.size() - 1);
+
+        bool isArrayIdx = true;
+        for (const QChar &c : seg)
+            if (!c.isDigit()) { isArrayIdx = false; break; }
+
+        int keyStart = -1, valStart = -1;
+        if (isArrayIdx) {
+            keyStart = findArrayElementInRange(text, scopeStart, scopeEnd, seg.toInt(), &valStart);
+        } else {
+            keyStart = findKeyInObjectRange(text, scopeStart, scopeEnd, seg, &valStart);
+        }
+        if (keyStart < 0) return; // 定位失败（截断区/未加载）→ 放弃高亮
+
+        if (isLast) {
+            finalKeyStart = keyStart;
+            finalValStart = valStart;
+            break;
+        }
+        // 还有子段：当前值必须是容器，缩小搜索范围继续
+        if (valStart >= text.length() || (text[valStart] != '{' && text[valStart] != '['))
+            return; // path 与文本不一致（截断/解析差异），放弃
+        scopeStart = valStart;
+        scopeEnd = findMatchingBracketEnd(text, valStart);
+    }
+
+    if (finalKeyStart < 0 || finalValStart >= text.length()) return;
+
+    int endPos = finalValStart;
+    const QChar ch = text[endPos];
     if (ch == '"') {
-        endPos = pos + 1;
+        endPos++;
         while (endPos < text.length()) {
             if (text[endPos] == '\\') { endPos += 2; continue; }
             if (text[endPos] == '"') { endPos++; break; }
             endPos++;
         }
     } else if (ch == '{' || ch == '[') {
-        endPos = findMatchingBracketEnd(text, pos);
+        endPos = findMatchingBracketEnd(text, endPos);
     } else if (ch == 't') {
-        endPos = pos + 4;
+        endPos += 4;
     } else if (ch == 'f') {
-        endPos = pos + 5;
+        endPos += 5;
     } else if (ch == 'n') {
-        endPos = pos + 4;
+        endPos += 4;
     } else if (ch == '-' || ch.isDigit()) {
-        endPos = pos;
+        endPos++;
         while (endPos < text.length() &&
                (text[endPos].isDigit() || text[endPos] == '-' || text[endPos] == '+' ||
                 text[endPos] == '.' || text[endPos] == 'e' || text[endPos] == 'E'))
@@ -719,7 +753,7 @@ void MainWindow::highlightInTextEdit(const QString &path, const QString &keyName
 
     m_input->setFocus();
     QTextCursor cur = m_input->textCursor();
-    cur.setPosition(keyIdx);
+    cur.setPosition(finalKeyStart);
     cur.setPosition(endPos, QTextCursor::KeepAnchor);
     m_input->setTextCursor(cur);
 
@@ -731,6 +765,65 @@ void MainWindow::highlightInTextEdit(const QString &path, const QString &keyName
     m_input->setExtraSelections(sel);
 
     m_input->ensureCursorVisible();
+}
+
+int MainWindow::skipJsonSpace(const QString &text, int pos)
+{
+    while (pos < text.length() && text[pos].isSpace()) pos++;
+    return pos;
+}
+
+// 在 [start, end) 中定位对象键 "key":，返回键起始位置；valStart 输出值起始（跳过空白）
+int MainWindow::findKeyInObjectRange(const QString &text, int start, int end,
+                                     const QString &key, int *valStart)
+{
+    const QString needle = "\"" + key + "\"";
+    int from = start;
+    while (true) {
+        const int idx = text.indexOf(needle, from);
+        if (idx < 0 || idx >= end) return -1;
+        const int p = skipJsonSpace(text, idx + needle.length());
+        if (p < end && text[p] == ':') {   // 必须是键（后面是冒号），跳过同名值文本
+            *valStart = skipJsonSpace(text, p + 1);
+            return idx;
+        }
+        from = idx + needle.length();
+    }
+}
+
+// 在 [start, end) 中定位数组第 index 个元素，返回元素起始位置
+int MainWindow::findArrayElementInRange(const QString &text, int start, int end,
+                                        int index, int *elemStart)
+{
+    int p = skipJsonSpace(text, start);
+    if (p >= end || text[p] != '[') return -1;
+    p = skipJsonSpace(text, p + 1);
+    if (p >= end || text[p] == ']') return -1; // 空数组
+    int cur = 0;
+    while (p < end) {
+        if (cur == index) { *elemStart = p; return p; }
+        const QChar c = text[p];
+        if (c == '{' || c == '[') {
+            p = findMatchingBracketEnd(text, p);
+        } else if (c == '"') {
+            p++;
+            while (p < end) {
+                if (text[p] == '\\') { p += 2; continue; }
+                if (text[p] == '"') { p++; break; }
+                p++;
+            }
+        } else {
+            while (p < end && text[p] != ',' && text[p] != ']') p++;
+        }
+        p = skipJsonSpace(text, p);
+        if (p < end && text[p] == ',') {
+            p = skipJsonSpace(text, p + 1);
+            cur++;
+        } else if (p < end && text[p] == ']') {
+            return -1;
+        }
+    }
+    return -1;
 }
 
 int MainWindow::findMatchingBracketEnd(const QString &text, int openPos)

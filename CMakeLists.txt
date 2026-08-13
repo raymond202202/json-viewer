@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(json-viewer-qt VERSION 2.0.6 LANGUAGES CXX)
+project(json-viewer-qt VERSION 2.0.7 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -21,11 +21,19 @@ add_library(jsonview STATIC
 target_include_directories(jsonview PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/lib)
 target_link_libraries(jsonview PUBLIC Qt6::Widgets)
 
-qt_add_executable(json-viewer-qt
+# Windows 图标资源：仅在 Windows 嵌入 exe（.rc 编译进 PE 资源，任务栏/开始菜单读取）
+set(WIN_ICON_RESOURCE "")
+if(WIN32)
+    set(WIN_ICON_RESOURCE resources/icon.rc)
+endif()
+
+# WIN32 标志：Windows 下编译为 GUI 子系统，避免启动弹出黑色控制台窗口（Linux 无影响）
+qt_add_executable(json-viewer-qt WIN32
     src/main.cpp
     src/MainWindow.cpp
     src/MainWindow.h
     resources/resources.qrc
+    ${WIN_ICON_RESOURCE}
 )
 
 target_link_libraries(json-viewer-qt PRIVATE jsonview Qt6::Widgets Qt6::Network)
