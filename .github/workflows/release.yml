@@ -57,17 +57,17 @@ jobs:
         shell: bash
         run: |
           pip install aqtinstall
-          aqt install-qt --timeout 60 windows desktop 6.5.3 win64_msvc2019_64 -O "$RUNNER_TEMP/Qt"
+          aqt install-qt --timeout 60 windows desktop 6.7.3 win64_msvc2022_64 -O "$RUNNER_TEMP/Qt"
       - name: Configure & Build (MSVC)
         shell: bash
         run: |
           cmake -B build -DCMAKE_BUILD_TYPE=Release \
-                -DCMAKE_PREFIX_PATH="$RUNNER_TEMP/Qt/6.5.3/msvc2019_64"
+                -DCMAKE_PREFIX_PATH="$RUNNER_TEMP/Qt/6.7.3/msvc2022_64"
           cmake --build build --config Release -j2
       - name: Package with windeployqt
         shell: bash
         run: |
-          export PATH="$RUNNER_TEMP/Qt/6.5.3/msvc2019_64/bin:$PATH"
+          export PATH="$RUNNER_TEMP/Qt/6.7.3/msvc2022_64/bin:$PATH"
           mkdir -p dist
           cp build/Release/json-viewer-qt.exe dist/
           cd dist
