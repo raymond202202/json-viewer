@@ -47,6 +47,8 @@ QTreeView#treeView::item:selected {
     background: rgba(9, 105, 218, 0.12); color: #2c2c2c;
 }
 QTreeView#treeView::branch { background: transparent; }
+QTreeView#treeView::branch:has-children:closed { image: url(:/branch_closed.png); }
+QTreeView#treeView::branch:has-children:open { image: url(:/branch_open.png); }
 QLabel#emptyState { color: #888888; font-size: 14px; }
 
 /* 搜索栏 */

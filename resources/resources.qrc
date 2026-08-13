@@ -1,6 +1,8 @@
 <RCC>
     <qresource prefix="/">
         <file>icon.png</file>
+        <file>branch_closed.png</file>
+        <file>branch_open.png</file>
         <file>styles/light.qss</file>
         <file>styles/dark.qss</file>
     </qresource>

@@ -3,3 +3,4 @@ build/
 *.rpm
 .DS_Store
 Thumbs.db
+.hermes/

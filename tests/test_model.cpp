@@ -10,6 +10,7 @@
 #include <QJsonParseError>
 #include <QElapsedTimer>
 #include <QFile>
+#include <QFileInfo>
 #include <QTimer>
 
 static int failures = 0;
@@ -19,10 +20,16 @@ static int failures = 0;
         else { qInfo().noquote() << "  ❌ FAIL:" << msg; failures++; } \
     } while (0)
 
+// 测试数据定位：基于源文件目录（tests/），兼容任意运行目录（数据随仓库入库，不再依赖 /tmp）
+static QString testDataPath(const QString &name)
+{
+    return QFileInfo(QStringLiteral(__FILE__)).absolutePath() + "/data/" + name;
+}
+
 int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
-    QFile f("/tmp/jv-test.json");
+    QFile f(testDataPath("jv-test.json"));
     f.open(QIODevice::ReadOnly);
     const QByteArray raw = f.readAll();
     QJsonParseError err;
@@ -109,7 +116,7 @@ int main(int argc, char *argv[])
     CHECK(hits == 1, QString("搜索「深层」命中 1 处（实际 %1，路径 %2）").arg(hits).arg(hitPath));
 
     qInfo() << "═══ HAR 检测 ═══";
-    QFile hf("/tmp/jv-test.har");
+    QFile hf(testDataPath("jv-test.har"));
     hf.open(QIODevice::ReadOnly);
     const QJsonDocument hdoc = QJsonDocument::fromJson(hf.readAll(), &err);
     JsonTreeModel hmodel;
@@ -122,7 +129,7 @@ int main(int argc, char *argv[])
     qInfo() << "═══ 大文件（1.4MB / 5万键） ═══";
     QElapsedTimer timer;
     timer.start();
-    QFile lf("/tmp/jv-large.json");
+    QFile lf(testDataPath("jv-large.json"));
     lf.open(QIODevice::ReadOnly);
     const QJsonDocument ldoc = QJsonDocument::fromJson(lf.readAll(), &err);
     const qint64 parseMs = timer.elapsed();
